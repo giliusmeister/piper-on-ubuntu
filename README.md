@@ -83,7 +83,7 @@ Copy this project to the Ubuntu server, then install only English and Greek firs
 
 ```bash
 chmod +x scripts/*.sh
-PIPER_PORT=8099 LANGUAGES="en el" ./scripts/install_ubuntu.sh
+PIPER_PORT=8099 LANGUAGES="en el" bash scripts/install_ubuntu.sh
 ```
 
 This installs the service on `127.0.0.1:8099` and writes an nginx snippet, but it does not claim port 80.
@@ -91,20 +91,20 @@ This installs the service on `127.0.0.1:8099` and writes an nginx snippet, but i
 If `8099` is busy too, choose another local-only port:
 
 ```bash
-PIPER_PORT=8199 LANGUAGES="en el" ./scripts/install_ubuntu.sh
+PIPER_PORT=8199 LANGUAGES="en el" bash scripts/install_ubuntu.sh
 ```
 
 After English and Greek are verified, download all OpenLingo voices:
 
 ```bash
-sudo MODEL_DIR=/opt/piper/models ./scripts/download_voice.sh
+sudo MODEL_DIR=/opt/piper/models bash scripts/download_voice.sh
 sudo systemctl restart piper-openai-api
 ```
 
 To override a voice during manual download:
 
 ```bash
-sudo MODEL_DIR=/opt/piper/models ./scripts/download_voice.sh \
+sudo MODEL_DIR=/opt/piper/models bash scripts/download_voice.sh \
   --language el \
   --voice el=el_GR-rapunzelina-medium
 ```
@@ -146,7 +146,7 @@ http://192.168.11.11/v1/audio/speech
 If you want a standalone nginx test port instead:
 
 ```bash
-CONFIGURE_NGINX=site PIPER_PORT=8099 LANGUAGES="en el" ./scripts/install_ubuntu.sh
+CONFIGURE_NGINX=site PIPER_PORT=8099 LANGUAGES="en el" bash scripts/install_ubuntu.sh
 ```
 
 That creates a site on port `8080`:
