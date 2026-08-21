@@ -182,7 +182,6 @@ TTS_PROVIDER=openai-compatible
 TTS_BASE_URL=http://192.168.11.11/v1
 TTS_API_KEY=local-dev-key
 TTS_MODEL=piper-auto
-TTS_VOICE=el
 TTS_RESPONSE_FORMAT=wav
 ```
 

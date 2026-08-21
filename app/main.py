@@ -17,7 +17,7 @@ MODEL_DIR = Path(os.getenv("PIPER_MODEL_DIR", "/opt/piper/models"))
 VOICE_MAP_PATH = Path(
     os.getenv("PIPER_VOICE_MAP_PATH", str(MODEL_DIR / "openlingo_voices.json"))
 )
-DEFAULT_LANGUAGE = os.getenv("PIPER_DEFAULT_LANGUAGE", "el")
+DEFAULT_LANGUAGE = os.getenv("PIPER_DEFAULT_LANGUAGE", "en")
 DEFAULT_MODEL_ID = "piper-el_GR-joy-medium"
 DEFAULT_MODEL_PATH = "/opt/piper/models/el_GR-joy-medium.onnx"
 DEFAULT_CONFIG_PATH = "/opt/piper/models/el_GR-joy-medium.onnx.json"
