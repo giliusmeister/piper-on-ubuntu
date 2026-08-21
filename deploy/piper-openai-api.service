@@ -1,0 +1,21 @@
+[Unit]
+Description=Local Piper OpenAI-compatible TTS API
+After=network.target
+
+[Service]
+Type=simple
+User=piperapi
+Group=piperapi
+WorkingDirectory=/opt/piper-openai-api
+EnvironmentFile=/opt/piper-openai-api/.env
+ExecStart=/opt/piper-openai-api/.venv/bin/uvicorn app.main:app --host ${PIPER_HOST} --port ${PIPER_PORT}
+Restart=on-failure
+RestartSec=3
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/tmp
+
+[Install]
+WantedBy=multi-user.target
