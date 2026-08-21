@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -20,6 +21,34 @@ DEFAULT_LANGUAGE = os.getenv("PIPER_DEFAULT_LANGUAGE", "el")
 DEFAULT_MODEL_ID = "piper-el_GR-joy-medium"
 DEFAULT_MODEL_PATH = "/opt/piper/models/el_GR-joy-medium.onnx"
 DEFAULT_CONFIG_PATH = "/opt/piper/models/el_GR-joy-medium.onnx.json"
+OPENAI_COMPAT_MODELS = {"piper-auto", "tts-1", "gpt-4o-mini-tts"}
+OPENAI_VOICE_ALIASES = {
+    "alloy",
+    "ash",
+    "ballad",
+    "coral",
+    "echo",
+    "fable",
+    "nova",
+    "onyx",
+    "sage",
+    "shimmer",
+}
+LANGUAGE_ALIASES = {
+    "en": ("en", "english"),
+    "es": ("es", "spanish", "espanol", "español"),
+    "de": ("de", "german", "deutsch"),
+    "fr": ("fr", "french", "francais", "français"),
+    "it": ("it", "italian", "italiano"),
+    "pt": ("pt", "portuguese", "portugues", "português"),
+    "ru": ("ru", "russian", "русский"),
+    "ar": ("ar", "arabic", "العربية"),
+    "hi": ("hi", "hindi", "हिन्दी", "हिंदी"),
+    "ko": ("ko", "korean", "한국어"),
+    "zh": ("zh", "chinese", "mandarin", "中文", "普通话"),
+    "ja": ("ja", "japanese", "日本語"),
+    "el": ("el", "greek", "ελληνικά", "ελληνικα"),
+}
 
 FALLBACK_VOICES: dict[str, dict[str, str]] = {
     "el": {
@@ -108,13 +137,36 @@ def _matches_voice(candidate: str, openlingo_code: str, voice: dict[str, str]) -
     return normalized in aliases
 
 
+def _language_from_instructions(instructions: str | None, voices: dict[str, dict[str, str]]) -> str | None:
+    if not instructions:
+        return None
+
+    normalized = instructions.lower()
+    for openlingo_code, aliases in LANGUAGE_ALIASES.items():
+        if openlingo_code not in voices:
+            continue
+        if any(_contains_language_alias(normalized, alias.lower()) for alias in aliases):
+            return openlingo_code
+
+    return None
+
+
+def _contains_language_alias(text: str, alias: str) -> bool:
+    if alias.isascii() and len(alias) <= 3:
+        return re.search(rf"(?<![a-z]){re.escape(alias)}(?![a-z])", text) is not None
+
+    return alias in text
+
+
 def _resolve_voice(payload: SpeechRequest) -> dict[str, str]:
     voices = _load_voice_map()
-    generic_model = payload.model in {"piper-auto", "tts-1", "gpt-4o-mini-tts"}
+    generic_model = payload.model in OPENAI_COMPAT_MODELS
+    openai_compat_voice = generic_model and payload.voice in OPENAI_VOICE_ALIASES
 
     selectors = [
         payload.language,
-        payload.voice,
+        None if openai_compat_voice else payload.voice,
+        _language_from_instructions(payload.instructions, voices),
         None if generic_model else payload.model,
     ]
 
@@ -126,7 +178,7 @@ def _resolve_voice(payload: SpeechRequest) -> dict[str, str]:
             if _matches_voice(selector, openlingo_code, voice):
                 return voice
 
-    if payload.language or payload.voice or not generic_model:
+    if payload.language or (payload.voice and not openai_compat_voice) or not generic_model:
         supported = ", ".join(sorted(voices.keys()))
         raise HTTPException(
             status_code=400,
