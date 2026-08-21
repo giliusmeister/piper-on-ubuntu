@@ -1,33 +1,53 @@
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Response
 from pydantic import BaseModel, Field
 
 
+MODEL_DIR = Path(os.getenv("PIPER_MODEL_DIR", "/opt/piper/models"))
+VOICE_MAP_PATH = Path(
+    os.getenv("PIPER_VOICE_MAP_PATH", str(MODEL_DIR / "openlingo_voices.json"))
+)
+DEFAULT_LANGUAGE = os.getenv("PIPER_DEFAULT_LANGUAGE", "el")
 DEFAULT_MODEL_ID = "piper-el_GR-joy-medium"
 DEFAULT_MODEL_PATH = "/opt/piper/models/el_GR-joy-medium.onnx"
 DEFAULT_CONFIG_PATH = "/opt/piper/models/el_GR-joy-medium.onnx.json"
 
+FALLBACK_VOICES: dict[str, dict[str, str]] = {
+    "el": {
+        "openlingo_code": "el",
+        "key": "el_GR-joy-medium",
+        "name": "joy",
+        "quality": "medium",
+        "language_code": "el_GR",
+        "language_name": "Greek",
+        "model_path": DEFAULT_MODEL_PATH,
+        "config_path": DEFAULT_CONFIG_PATH,
+    }
+}
+
 
 class SpeechRequest(BaseModel):
-    model: str = Field(default=DEFAULT_MODEL_ID)
+    model: str = Field(default="piper-auto")
     voice: str | None = Field(default=None)
     input: str = Field(min_length=1, max_length=5000)
     instructions: str | None = None
     response_format: str = Field(default="wav")
+    language: str | None = Field(default=None)
     speed: float | None = Field(default=None, gt=0.25, le=4.0)
 
 
 app = FastAPI(
     title="Local Piper OpenAI-compatible TTS API",
-    version="0.1.0",
+    version="0.2.0",
 )
 
 
@@ -45,18 +65,6 @@ def require_auth(authorization: Annotated[str | None, Header()] = None) -> None:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
-def _model_path() -> Path:
-    return Path(os.getenv("PIPER_MODEL_PATH", DEFAULT_MODEL_PATH))
-
-
-def _config_path() -> Path:
-    return Path(os.getenv("PIPER_CONFIG_PATH", DEFAULT_CONFIG_PATH))
-
-
-def _model_id() -> str:
-    return os.getenv("PIPER_MODEL_ID", DEFAULT_MODEL_ID)
-
-
 def _piper_bin() -> str:
     return os.getenv("PIPER_BIN", "piper")
 
@@ -65,15 +73,99 @@ def _ffmpeg_bin() -> str:
     return os.getenv("FFMPEG_BIN", "ffmpeg")
 
 
-@app.get("/health")
-def health() -> dict[str, object]:
-    model_path = _model_path()
-    config_path = _config_path()
+def _load_voice_map() -> dict[str, dict[str, str]]:
+    if VOICE_MAP_PATH.exists():
+        data = json.loads(VOICE_MAP_PATH.read_text(encoding="utf-8"))
+        return data.get("voices", data)
+
+    return FALLBACK_VOICES
+
+
+def _voice_to_model(voice: dict[str, str]) -> dict[str, str]:
+    key = voice["key"]
     return {
-        "ok": model_path.exists() and config_path.exists(),
-        "model": _model_id(),
+        "id": f"piper-{key}",
+        "object": "model",
+        "owned_by": "local-piper",
+        "language": voice.get("openlingo_code"),
+        "voice": voice.get("name"),
+        "piper_key": key,
+    }
+
+
+def _matches_voice(candidate: str, openlingo_code: str, voice: dict[str, str]) -> bool:
+    normalized = candidate.strip()
+    if not normalized:
+        return False
+
+    aliases = {
+        openlingo_code,
+        voice.get("name", ""),
+        voice["key"],
+        f"piper-{voice['key']}",
+        voice.get("language_code", ""),
+    }
+    return normalized in aliases
+
+
+def _resolve_voice(payload: SpeechRequest) -> dict[str, str]:
+    voices = _load_voice_map()
+    generic_model = payload.model in {"piper-auto", "tts-1", "gpt-4o-mini-tts"}
+
+    selectors = [
+        payload.language,
+        payload.voice,
+        None if generic_model else payload.model,
+    ]
+
+    for selector in selectors:
+        if selector is None:
+            continue
+
+        for openlingo_code, voice in voices.items():
+            if _matches_voice(selector, openlingo_code, voice):
+                return voice
+
+    if payload.language or payload.voice or not generic_model:
+        supported = ", ".join(sorted(voices.keys()))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported language/voice/model. Supported OpenLingo codes: {supported}",
+        )
+
+    if DEFAULT_LANGUAGE in voices:
+        return voices[DEFAULT_LANGUAGE]
+
+    supported = ", ".join(sorted(voices.keys()))
+    raise HTTPException(
+        status_code=400,
+        detail=f"Unsupported language/voice/model. Supported OpenLingo codes: {supported}",
+    )
+
+
+def _voice_status(voice: dict[str, str]) -> dict[str, Any]:
+    model_path = Path(voice["model_path"])
+    config_path = Path(voice["config_path"])
+    return {
+        "key": voice["key"],
+        "name": voice.get("name"),
+        "language_code": voice.get("language_code"),
+        "model_id": f"piper-{voice['key']}",
         "model_path": str(model_path),
         "config_path": str(config_path),
+        "installed": model_path.exists() and config_path.exists(),
+    }
+
+
+@app.get("/health")
+def health() -> dict[str, object]:
+    voices = _load_voice_map()
+    voice_status = {code: _voice_status(voice) for code, voice in voices.items()}
+    return {
+        "ok": all(item["installed"] for item in voice_status.values()),
+        "default_language": DEFAULT_LANGUAGE,
+        "voice_map_path": str(VOICE_MAP_PATH),
+        "voices": voice_status,
         "piper": shutil.which(_piper_bin()) is not None,
         "ffmpeg": shutil.which(_ffmpeg_bin()) is not None,
     }
@@ -81,36 +173,26 @@ def health() -> dict[str, object]:
 
 @app.get("/v1/models", dependencies=[Depends(require_auth)])
 def models() -> dict[str, object]:
-    model_id = _model_id()
     return {
         "object": "list",
-        "data": [
-            {
-                "id": model_id,
-                "object": "model",
-                "owned_by": "local-piper",
-            }
-        ],
+        "data": [_voice_to_model(voice) for voice in _load_voice_map().values()],
     }
 
 
 @app.post("/v1/audio/speech", dependencies=[Depends(require_auth)])
 def speech(payload: SpeechRequest) -> Response:
-    model_id = _model_id()
-    if payload.model not in {model_id, DEFAULT_MODEL_ID, "tts-1", "gpt-4o-mini-tts"}:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unsupported model '{payload.model}'. Use '{model_id}'.",
-        )
-
+    voice = _resolve_voice(payload)
     response_format = payload.response_format.lower()
     if response_format not in {"wav", "mp3"}:
         raise HTTPException(status_code=400, detail="response_format must be 'wav' or 'mp3'")
 
-    model_path = _model_path()
-    config_path = _config_path()
+    model_path = Path(voice["model_path"])
+    config_path = Path(voice["config_path"])
     if not model_path.exists() or not config_path.exists():
-        raise HTTPException(status_code=503, detail="Piper model files are missing")
+        raise HTTPException(
+            status_code=503,
+            detail=f"Piper model files are missing for {voice['key']}",
+        )
 
     with tempfile.TemporaryDirectory(prefix="piper-tts-") as tmpdir:
         wav_path = Path(tmpdir) / "speech.wav"

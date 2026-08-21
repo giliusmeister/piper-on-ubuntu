@@ -1,0 +1,10 @@
+.env
+*.env
+__pycache__/
+*.py[cod]
+*.wav
+*.mp3
+*.log
+.venv/
+models/
+openlingo_voices.json
