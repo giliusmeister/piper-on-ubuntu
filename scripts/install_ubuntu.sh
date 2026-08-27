@@ -7,6 +7,8 @@ LANGUAGES="${LANGUAGES:-all}"
 CONFIGURE_NGINX="${CONFIGURE_NGINX:-snippet}"
 PIPER_PORT="${PIPER_PORT:-8099}"
 PIPER_HOST="${PIPER_HOST:-127.0.0.1}"
+LAN_HOST="${LAN_HOST:-192.168.11.11}"
+NGINX_API_PORT="${NGINX_API_PORT:-8100}"
 
 if ! id "$APP_USER" >/dev/null 2>&1; then
   sudo useradd --system --home "$APP_DIR" --shell /usr/sbin/nologin "$APP_USER"
@@ -38,6 +40,8 @@ if [ ! -f "$APP_DIR/.env" ]; then
 fi
 sudo sed -i "s/^PIPER_HOST=.*/PIPER_HOST=$PIPER_HOST/" "$APP_DIR/.env"
 sudo sed -i "s/^PIPER_PORT=.*/PIPER_PORT=$PIPER_PORT/" "$APP_DIR/.env"
+if grep -q "^LAN_HOST=" "$APP_DIR/.env"; then sudo sed -i "s/^LAN_HOST=.*/LAN_HOST=$LAN_HOST/" "$APP_DIR/.env"; else echo "LAN_HOST=$LAN_HOST" | sudo tee -a "$APP_DIR/.env" >/dev/null; fi
+if grep -q "^NGINX_API_PORT=" "$APP_DIR/.env"; then sudo sed -i "s/^NGINX_API_PORT=.*/NGINX_API_PORT=$NGINX_API_PORT/" "$APP_DIR/.env"; else echo "NGINX_API_PORT=$NGINX_API_PORT" | sudo tee -a "$APP_DIR/.env" >/dev/null; fi
 
 sudo cp deploy/piper-openai-api.service /etc/systemd/system/piper-openai-api.service
 sudo systemctl daemon-reload
@@ -50,11 +54,11 @@ sudo sed "s/__PIPER_PORT__/$PIPER_PORT/g" \
   | sudo tee /etc/nginx/snippets/piper-openai-api.locations.conf >/dev/null
 
 if [ "$CONFIGURE_NGINX" = "site" ]; then
-  sudo cp deploy/nginx-piper-openai-api.site.conf /etc/nginx/sites-available/piper-openai-api
+  sed -e "s/__NGINX_API_PORT__/$NGINX_API_PORT/g" -e "s/__LAN_HOST__/$LAN_HOST/g" deploy/nginx-piper-openai-api.site.conf | sudo tee /etc/nginx/sites-available/piper-openai-api >/dev/null
   sudo ln -sf /etc/nginx/sites-available/piper-openai-api /etc/nginx/sites-enabled/piper-openai-api
   sudo nginx -t
   sudo systemctl reload nginx
-  echo "Ready through nginx: http://192.168.11.11:8080/v1/audio/speech"
+  echo "Ready through nginx: http://$LAN_HOST:$NGINX_API_PORT/v1/audio/speech"
 else
   echo "Nginx snippet installed: /etc/nginx/snippets/piper-openai-api.locations.conf"
   echo "Include it in an existing server block, then run: sudo nginx -t && sudo systemctl reload nginx"
