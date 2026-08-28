@@ -211,4 +211,4 @@ Sources checked:
 
 - Piper voices are published in [`rhasspy/piper-voices`](https://huggingface.co/rhasspy/piper-voices/blob/main/voices.json).
 - The upstream Piper voice list is in [`rhasspy/piper/VOICES.md`](https://github.com/rhasspy/piper/blob/master/VOICES.md).
-- The Python package used here is [`piper-tts`](https://pypi.org/project/piper-tts/), currently pinned to `1.6.0`.
+- The Python package used here is [`piper-tts`](https://pypi.org/project/piper-tts/), currently pinned to `1.7.0`.
