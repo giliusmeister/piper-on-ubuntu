@@ -77,6 +77,18 @@ Or choose the exact Piper model id:
 
 `instructions` is accepted for OpenAI compatibility but ignored by Piper. MP3 output requires `ffmpeg`.
 
+### Pauses
+
+The wrapper passes `PIPER_SENTENCE_SILENCE` to Piper as `--sentence-silence`.
+The default is `0.4`, which adds a short pause after sentence boundaries such as `.`, `?`, and `!`.
+
+```env
+PIPER_SENTENCE_SILENCE=0.4
+```
+
+Piper also has upstream support for per-phoneme pauses in some builds/configurations, but the
+Python CLI installed by this project exposes `--sentence-silence` reliably.
+
 ## Ubuntu Install
 
 Copy this project to the Ubuntu server, then install the full LAN profile for the second server:

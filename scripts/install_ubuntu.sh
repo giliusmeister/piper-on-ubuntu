@@ -7,6 +7,7 @@ LANGUAGES="${LANGUAGES:-all}"
 CONFIGURE_NGINX="${CONFIGURE_NGINX:-snippet}"
 PIPER_PORT="${PIPER_PORT:-8099}"
 PIPER_HOST="${PIPER_HOST:-127.0.0.1}"
+PIPER_SENTENCE_SILENCE="${PIPER_SENTENCE_SILENCE:-0.4}"
 LAN_HOST="${LAN_HOST:-192.168.11.11}"
 NGINX_API_PORT="${NGINX_API_PORT:-8100}"
 
@@ -40,6 +41,7 @@ if [ ! -f "$APP_DIR/.env" ]; then
 fi
 sudo sed -i "s/^PIPER_HOST=.*/PIPER_HOST=$PIPER_HOST/" "$APP_DIR/.env"
 sudo sed -i "s/^PIPER_PORT=.*/PIPER_PORT=$PIPER_PORT/" "$APP_DIR/.env"
+if grep -q "^PIPER_SENTENCE_SILENCE=" "$APP_DIR/.env"; then sudo sed -i "s/^PIPER_SENTENCE_SILENCE=.*/PIPER_SENTENCE_SILENCE=$PIPER_SENTENCE_SILENCE/" "$APP_DIR/.env"; else echo "PIPER_SENTENCE_SILENCE=$PIPER_SENTENCE_SILENCE" | sudo tee -a "$APP_DIR/.env" >/dev/null; fi
 if grep -q "^LAN_HOST=" "$APP_DIR/.env"; then sudo sed -i "s/^LAN_HOST=.*/LAN_HOST=$LAN_HOST/" "$APP_DIR/.env"; else echo "LAN_HOST=$LAN_HOST" | sudo tee -a "$APP_DIR/.env" >/dev/null; fi
 if grep -q "^NGINX_API_PORT=" "$APP_DIR/.env"; then sudo sed -i "s/^NGINX_API_PORT=.*/NGINX_API_PORT=$NGINX_API_PORT/" "$APP_DIR/.env"; else echo "NGINX_API_PORT=$NGINX_API_PORT" | sudo tee -a "$APP_DIR/.env" >/dev/null; fi
 

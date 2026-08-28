@@ -18,6 +18,7 @@ VOICE_MAP_PATH = Path(
     os.getenv("PIPER_VOICE_MAP_PATH", str(MODEL_DIR / "openlingo_voices.json"))
 )
 DEFAULT_LANGUAGE = os.getenv("PIPER_DEFAULT_LANGUAGE", "en")
+DEFAULT_SENTENCE_SILENCE = 0.4
 DEFAULT_MODEL_ID = "piper-el_GR-joy-medium"
 DEFAULT_MODEL_PATH = "/opt/piper/models/el_GR-joy-medium.onnx"
 DEFAULT_CONFIG_PATH = "/opt/piper/models/el_GR-joy-medium.onnx.json"
@@ -100,6 +101,24 @@ def _piper_bin() -> str:
 
 def _ffmpeg_bin() -> str:
     return os.getenv("FFMPEG_BIN", "ffmpeg")
+
+
+def _sentence_silence() -> float:
+    raw_value = os.getenv("PIPER_SENTENCE_SILENCE", str(DEFAULT_SENTENCE_SILENCE)).strip()
+    try:
+        value = float(raw_value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="PIPER_SENTENCE_SILENCE must be a number of seconds",
+        ) from exc
+
+    if value < 0 or value > 5:
+        raise HTTPException(
+            status_code=500,
+            detail="PIPER_SENTENCE_SILENCE must be between 0 and 5 seconds",
+        )
+    return value
 
 
 def _load_voice_map() -> dict[str, dict[str, str]]:
@@ -220,6 +239,7 @@ def health() -> dict[str, object]:
         "voices": voice_status,
         "piper": shutil.which(_piper_bin()) is not None,
         "ffmpeg": shutil.which(_ffmpeg_bin()) is not None,
+        "sentence_silence": _sentence_silence(),
     }
 
 
@@ -257,6 +277,8 @@ def speech(payload: SpeechRequest) -> Response:
             str(config_path),
             "--output_file",
             str(wav_path),
+            "--sentence-silence",
+            str(_sentence_silence()),
         ]
 
         try:
