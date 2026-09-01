@@ -21,10 +21,12 @@ PIPER_DEFAULT_LANGUAGE="${PIPER_DEFAULT_LANGUAGE:-en}"
 PIPER_PORT="${PIPER_PORT:-8099}"
 PIPER_HOST="${PIPER_HOST:-127.0.0.1}"
 PIPER_TIMEOUT_SECONDS="${PIPER_TIMEOUT_SECONDS:-60}"
+PIPER_TTS_MAX_CONCURRENT="${PIPER_TTS_MAX_CONCURRENT:-1}"
 PIPER_SENTENCE_SILENCE="${PIPER_SENTENCE_SILENCE:-0.4}"
 LAN_HOST="${LAN_HOST:-192.168.11.11}"
 NGINX_API_PORT="${NGINX_API_PORT:-8100}"
 NGINX_ALLOW_CIDR="${NGINX_ALLOW_CIDR:-100.65.0.0/16}"
+NGINX_ALLOW_IPV6_CIDR="${NGINX_ALLOW_IPV6_CIDR:-}"
 ENABLE_TLS="${ENABLE_TLS:-0}"
 TLS_CERT_PATH="${TLS_CERT_PATH:-/etc/nginx/tls/piper-openai-api/fullchain.pem}"
 TLS_KEY_PATH="${TLS_KEY_PATH:-/etc/nginx/tls/piper-openai-api/privkey.pem}"
@@ -113,10 +115,12 @@ upsert_env PIPER_DEFAULT_LANGUAGE "$PIPER_DEFAULT_LANGUAGE"
 upsert_env PIPER_HOST "$PIPER_HOST"
 upsert_env PIPER_PORT "$PIPER_PORT"
 upsert_env PIPER_TIMEOUT_SECONDS "$PIPER_TIMEOUT_SECONDS"
+upsert_env PIPER_TTS_MAX_CONCURRENT "$PIPER_TTS_MAX_CONCURRENT"
 upsert_env PIPER_SENTENCE_SILENCE "$PIPER_SENTENCE_SILENCE"
 upsert_env LAN_HOST "$LAN_HOST"
 upsert_env NGINX_API_PORT "$NGINX_API_PORT"
 upsert_env NGINX_ALLOW_CIDR "$NGINX_ALLOW_CIDR"
+upsert_env NGINX_ALLOW_IPV6_CIDR "$NGINX_ALLOW_IPV6_CIDR"
 upsert_env ENABLE_TLS "$ENABLE_TLS"
 upsert_env TLS_CERT_PATH "$TLS_CERT_PATH"
 upsert_env TLS_KEY_PATH "$TLS_KEY_PATH"
@@ -144,9 +148,13 @@ sudo systemctl enable piper-openai-api
 sudo systemctl restart piper-openai-api
 
 sudo mkdir -p /etc/nginx/snippets
+NGINX_ALLOW_RULES="allow $NGINX_ALLOW_CIDR;"
+if [ -n "$NGINX_ALLOW_IPV6_CIDR" ]; then
+  NGINX_ALLOW_RULES="$NGINX_ALLOW_RULES\nallow $NGINX_ALLOW_IPV6_CIDR;"
+fi
 sudo sed \
   -e "s/__PIPER_PORT__/$PIPER_PORT/g" \
-  -e "s|__NGINX_ALLOW_CIDR__|$NGINX_ALLOW_CIDR|g" \
+  -e "s|__NGINX_ALLOW_RULES__|$NGINX_ALLOW_RULES|g" \
   deploy/nginx-piper-openai-api.locations.conf \
   | sudo tee /etc/nginx/snippets/piper-openai-api.locations.conf >/dev/null
 

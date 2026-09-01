@@ -6,6 +6,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -19,6 +20,8 @@ VOICE_MAP_PATH = Path(
 )
 DEFAULT_LANGUAGE = os.getenv("PIPER_DEFAULT_LANGUAGE", "en")
 DEFAULT_SENTENCE_SILENCE = 0.4
+MAX_CONCURRENT_TTS = int(os.getenv("PIPER_TTS_MAX_CONCURRENT", "1"))
+TTS_SEMAPHORE = threading.Semaphore(MAX_CONCURRENT_TTS)
 DEFAULT_MODEL_ID = "piper-el_GR-joy-medium"
 DEFAULT_MODEL_PATH = "/opt/piper/models/el_GR-joy-medium.onnx"
 DEFAULT_CONFIG_PATH = "/opt/piper/models/el_GR-joy-medium.onnx.json"
@@ -119,6 +122,15 @@ def _sentence_silence() -> float:
             detail="PIPER_SENTENCE_SILENCE must be between 0 and 5 seconds",
         )
     return value
+
+
+def _max_concurrent_tts() -> int:
+    if MAX_CONCURRENT_TTS < 1:
+        raise HTTPException(
+            status_code=500,
+            detail="PIPER_TTS_MAX_CONCURRENT must be at least 1",
+        )
+    return MAX_CONCURRENT_TTS
 
 
 def _load_voice_map() -> dict[str, dict[str, str]]:
@@ -240,6 +252,7 @@ def health() -> dict[str, object]:
         "piper": shutil.which(_piper_bin()) is not None,
         "ffmpeg": shutil.which(_ffmpeg_bin()) is not None,
         "sentence_silence": _sentence_silence(),
+        "max_concurrent_tts": _max_concurrent_tts(),
     }
 
 
@@ -253,6 +266,7 @@ def models() -> dict[str, object]:
 
 @app.post("/v1/audio/speech", dependencies=[Depends(require_auth)])
 def speech(payload: SpeechRequest) -> Response:
+    _max_concurrent_tts()
     voice = _resolve_voice(payload)
     response_format = payload.response_format.lower()
     if response_format not in {"wav", "mp3"}:
@@ -266,7 +280,7 @@ def speech(payload: SpeechRequest) -> Response:
             detail=f"Piper model files are missing for {voice['key']}",
         )
 
-    with tempfile.TemporaryDirectory(prefix="piper-tts-") as tmpdir:
+    with TTS_SEMAPHORE, tempfile.TemporaryDirectory(prefix="piper-tts-") as tmpdir:
         wav_path = Path(tmpdir) / "speech.wav"
 
         command = [
