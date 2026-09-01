@@ -106,6 +106,56 @@ If `8099` is busy too, choose another local-only port:
 LAN_HOST=192.168.11.21 NGINX_API_PORT=8100 PIPER_PORT=8199 LANGUAGES="en el" CONFIGURE_NGINX=site bash scripts/install_ubuntu.sh
 ```
 
+### Install With NetBird Wildcard Certificate
+
+If the main NetBird server already exposes the wildcard certificate for the subnet, keep the real URL and Basic Auth credentials in local `.env`. The installer loads `.env` automatically and can fetch the certificate over HTTPS or SSH before writing the nginx TLS site.
+
+Local `.env` on the target server:
+
+```env
+ENABLE_TLS=1
+ENABLE_CERT_SYNC=1
+CERT_SYNC_INTERVAL=15min
+CERT_SYNC_RANDOMIZED_DELAY=2min
+NETBIRD_CERT_SOURCE_URL=https://netbird.example.internal/example.internal
+NETBIRD_CERT_BASIC_AUTH_USER=cert-reader
+NETBIRD_CERT_BASIC_AUTH_PASSWORD=
+```
+
+Quote `.env` values that contain shell-special characters, for example `NETBIRD_CERT_BASIC_AUTH_PASSWORD='secret&value'`.
+
+Install command:
+
+```bash
+chmod +x scripts/*.sh
+LAN_HOST=192.168.11.21 \
+NGINX_API_PORT=9443 \
+PIPER_PORT=8099 \
+NGINX_ALLOW_CIDR=100.65.0.0/16 \
+LANGUAGES="all" \
+CONFIGURE_NGINX=site \
+bash scripts/install_ubuntu.sh
+```
+
+For HTTPS download mode, the installer expects `fullchain.pem` and `privkey.pem` under `NETBIRD_CERT_SOURCE_URL`. It copies them to:
+
+```text
+/etc/nginx/tls/piper-openai-api/fullchain.pem
+/etc/nginx/tls/piper-openai-api/privkey.pem
+```
+
+With `ENABLE_CERT_SYNC=1`, the installer also enables `piper-openai-api-cert-sync.timer`. The timer checks the NetBird certificate source every `CERT_SYNC_INTERVAL`, installs the new certificate only when the files change, then validates and reloads nginx.
+
+If the certificate file URLs are different, set explicit URLs instead:
+
+```bash
+ENABLE_TLS=1 \
+NETBIRD_CERT_FULLCHAIN_URL=https://netbird.example.internal/example.internal/fullchain.pem \
+NETBIRD_CERT_PRIVKEY_URL=https://netbird.example.internal/example.internal/privkey.pem \
+CONFIGURE_NGINX=site \
+bash scripts/install_ubuntu.sh
+```
+
 After English and Greek are verified, download all OpenLingo voices:
 
 ```bash
@@ -123,7 +173,7 @@ sudo MODEL_DIR=/opt/piper/models bash scripts/download_voice.sh \
 
 The installer:
 
-1. Installs Python, nginx, ffmpeg, and curl.
+1. Installs Python, nginx, ffmpeg, curl, and the OpenSSH client.
 2. Creates a `piperapi` system user.
 3. Copies the app to `/opt/piper-openai-api`.
 4. Creates a Python virtualenv and installs `piper-tts`.
@@ -131,6 +181,33 @@ The installer:
 6. Writes `/opt/piper/models/openlingo_voices.json`.
 7. Installs and starts `piper-openai-api.service`.
 8. Writes `/etc/nginx/snippets/piper-openai-api.locations.conf`.
+9. Optionally fetches TLS certificate files from the main NetBird server and writes an HTTPS nginx site.
+10. Optionally enables a systemd timer that keeps polling the certificate source and reloads nginx only after a changed certificate is installed.
+
+## Certificate Sync Script
+
+The installer can keep this automatic through `piper-openai-api-cert-sync.timer`. Use these commands to inspect or force the sync on the second server:
+
+```bash
+sudo systemctl list-timers piper-openai-api-cert-sync.timer
+sudo systemctl status piper-openai-api-cert-sync.timer
+sudo systemctl start piper-openai-api-cert-sync.service
+```
+
+The sync service reads `/opt/piper-openai-api/.env`. The fetch script can still be run manually with another env file if needed:
+
+```bash
+sudo CERT_ENV_FILE=/path/to/local.env CERT_SYNC_RELOAD_NGINX=1 bash /opt/piper-openai-api/scripts/fetch_netbird_certificate.sh
+```
+
+For SSH/SCP mode, keep using host/path variables instead of URL variables:
+
+```bash
+sudo SOURCE_HOST=100.64.0.10 \
+SOURCE_USER=root \
+SOURCE_CERT_DIR=/etc/letsencrypt/live/subnet.example.com \
+bash /opt/piper-openai-api/scripts/fetch_netbird_certificate.sh
+```
 
 ## Nginx
 
@@ -167,6 +244,12 @@ That creates a standalone nginx site on `NGINX_API_PORT`, for example `8100`:
 http://192.168.11.21:8100/v1/audio/speech
 ```
 
+The nginx snippet allows only `NGINX_ALLOW_CIDR`, which defaults to the NetBird subnet `100.65.0.0/16`. With `ENABLE_TLS=1`, the standalone site listens with TLS on the same configured port, for example:
+
+```text
+https://192.168.11.21:9443/v1/audio/speech
+```
+
 ## Manual CLI Check
 
 After installation:
@@ -197,6 +280,12 @@ TTS_MODEL=piper-auto
 TTS_RESPONSE_FORMAT=mp3
 ```
 
+If the second server is exposed through TLS, use the HTTPS base URL instead:
+
+```env
+TTS_BASE_URL=https://192.168.11.21:9443/v1
+```
+
 Send the current OpenLingo language code as `language` or `voice` in the speech request.
 
 ## Notes
@@ -206,6 +295,7 @@ Send the current OpenLingo language code as `language` or `voice` in the speech 
 - Auth defaults to `Authorization: Bearer local-dev-key`; replace it in `/opt/piper-openai-api/.env` for real use.
 - Set `PIPER_API_KEY=` empty in `/opt/piper-openai-api/.env` to disable auth inside a trusted LAN.
 - Do not commit a real `.env`; `.gitignore` excludes it.
+- The HTTPS install path assumes the target server can reach the main NetBird certificate endpoint or SSH host and has access to the wildcard certificate files. Keep real internal URLs, Basic Auth credentials, SSH users, and hostnames in local `.env` only.
 
 Sources checked:
 

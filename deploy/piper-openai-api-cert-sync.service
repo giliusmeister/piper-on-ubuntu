@@ -1,0 +1,8 @@
+[Unit]
+Description=Fetch Piper nginx TLS certificate from NetBird source
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/opt/piper-openai-api/scripts/fetch_netbird_certificate.sh

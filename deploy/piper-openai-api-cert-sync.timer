@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh Piper nginx TLS certificate from NetBird source
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=__CERT_SYNC_INTERVAL__
+RandomizedDelaySec=__CERT_SYNC_RANDOMIZED_DELAY__
+Persistent=true
+
+[Install]
+WantedBy=timers.target
