@@ -192,6 +192,8 @@ The installer can keep this automatic through `piper-openai-api-cert-sync.timer`
 sudo systemctl list-timers piper-openai-api-cert-sync.timer
 sudo systemctl status piper-openai-api-cert-sync.timer
 sudo systemctl start piper-openai-api-cert-sync.service
+sudo systemctl status piper-openai-api-monitor.timer
+sudo systemctl start piper-openai-api-monitor.service
 ```
 
 The sync service reads `/opt/piper-openai-api/.env`. The fetch script can still be run manually with another env file if needed:
@@ -293,6 +295,7 @@ Send the current OpenLingo language code as `language` or `voice` in the speech 
 - `POST /v1/audio/speech` returns `audio/wav` or `audio/mpeg`.
 - `GET /v1/models` returns a minimal OpenAI-style model list.
 - `PIPER_TTS_MAX_CONCURRENT=1` serializes speech generation so one Piper process can use CPU without parallel requests exhausting the host.
+- `ENABLE_PIPER_MONITOR=1` enables a systemd timer that checks the service, health endpoints, cert-sync timer, and available memory.
 - Auth defaults to `Authorization: Bearer local-dev-key`; replace it in `/opt/piper-openai-api/.env` for real use.
 - Set `PIPER_API_KEY=` empty in `/opt/piper-openai-api/.env` to disable auth inside a trusted LAN.
 - Do not commit a real `.env`; `.gitignore` excludes it.

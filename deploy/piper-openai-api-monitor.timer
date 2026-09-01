@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Piper API health monitor periodically
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=__PIPER_MONITOR_INTERVAL__
+RandomizedDelaySec=__PIPER_MONITOR_RANDOMIZED_DELAY__
+Persistent=true
+
+[Install]
+WantedBy=timers.target

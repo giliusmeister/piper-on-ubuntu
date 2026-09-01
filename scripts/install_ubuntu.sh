@@ -22,6 +22,11 @@ PIPER_PORT="${PIPER_PORT:-8099}"
 PIPER_HOST="${PIPER_HOST:-127.0.0.1}"
 PIPER_TIMEOUT_SECONDS="${PIPER_TIMEOUT_SECONDS:-60}"
 PIPER_TTS_MAX_CONCURRENT="${PIPER_TTS_MAX_CONCURRENT:-1}"
+ENABLE_PIPER_MONITOR="${ENABLE_PIPER_MONITOR:-1}"
+PIPER_MONITOR_INTERVAL="${PIPER_MONITOR_INTERVAL:-1min}"
+PIPER_MONITOR_RANDOMIZED_DELAY="${PIPER_MONITOR_RANDOMIZED_DELAY:-10s}"
+PIPER_MONITOR_TIMEOUT_SECONDS="${PIPER_MONITOR_TIMEOUT_SECONDS:-10}"
+PIPER_MONITOR_MIN_AVAILABLE_MB="${PIPER_MONITOR_MIN_AVAILABLE_MB:-512}"
 PIPER_SENTENCE_SILENCE="${PIPER_SENTENCE_SILENCE:-0.4}"
 LAN_HOST="${LAN_HOST:-192.168.11.11}"
 NGINX_API_PORT="${NGINX_API_PORT:-8100}"
@@ -116,6 +121,11 @@ upsert_env PIPER_HOST "$PIPER_HOST"
 upsert_env PIPER_PORT "$PIPER_PORT"
 upsert_env PIPER_TIMEOUT_SECONDS "$PIPER_TIMEOUT_SECONDS"
 upsert_env PIPER_TTS_MAX_CONCURRENT "$PIPER_TTS_MAX_CONCURRENT"
+upsert_env ENABLE_PIPER_MONITOR "$ENABLE_PIPER_MONITOR"
+upsert_env PIPER_MONITOR_INTERVAL "$PIPER_MONITOR_INTERVAL"
+upsert_env PIPER_MONITOR_RANDOMIZED_DELAY "$PIPER_MONITOR_RANDOMIZED_DELAY"
+upsert_env PIPER_MONITOR_TIMEOUT_SECONDS "$PIPER_MONITOR_TIMEOUT_SECONDS"
+upsert_env PIPER_MONITOR_MIN_AVAILABLE_MB "$PIPER_MONITOR_MIN_AVAILABLE_MB"
 upsert_env PIPER_SENTENCE_SILENCE "$PIPER_SENTENCE_SILENCE"
 upsert_env LAN_HOST "$LAN_HOST"
 upsert_env NGINX_API_PORT "$NGINX_API_PORT"
@@ -216,6 +226,19 @@ if [ "$ENABLE_TLS" = "1" ] && [ "$ENABLE_CERT_SYNC" = "1" ]; then
   sudo systemctl daemon-reload
   sudo systemctl enable --now piper-openai-api-cert-sync.timer
   echo "Certificate sync timer enabled: piper-openai-api-cert-sync.timer"
+fi
+
+
+if [ "$ENABLE_PIPER_MONITOR" = "1" ]; then
+  sudo cp deploy/piper-openai-api-monitor.service /etc/systemd/system/piper-openai-api-monitor.service
+  sudo sed \
+    -e "s/__PIPER_MONITOR_INTERVAL__/$PIPER_MONITOR_INTERVAL/g" \
+    -e "s/__PIPER_MONITOR_RANDOMIZED_DELAY__/$PIPER_MONITOR_RANDOMIZED_DELAY/g" \
+    deploy/piper-openai-api-monitor.timer \
+    | sudo tee /etc/systemd/system/piper-openai-api-monitor.timer >/dev/null
+  sudo systemctl daemon-reload
+  sudo systemctl enable --now piper-openai-api-monitor.timer
+  echo "Piper monitor timer enabled: piper-openai-api-monitor.timer"
 fi
 
 echo "Local service ready: http://$PIPER_HOST:$PIPER_PORT/v1/audio/speech"

@@ -1,0 +1,8 @@
+[Unit]
+Description=Check Piper OpenAI-compatible TTS API health
+Wants=network-online.target
+After=network-online.target piper-openai-api.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/piper-openai-api/scripts/check_piper_service.sh
